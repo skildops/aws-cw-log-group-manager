@@ -1,6 +1,7 @@
 import boto3
 import logging
 import os
+import concurrent.futures
 
 from botocore.exceptions import ClientError
 
@@ -63,7 +64,7 @@ def main():
     if AWS_REGIONS.lower() == 'all':
         cwRegions = fetch_active_regions()
     elif ',' in AWS_REGIONS:
-        cwRegions = [r.trim() for r in AWS_REGIONS.split(',')]
+        cwRegions = [r.strip() for r in AWS_REGIONS.split(',')]
     else:
         cwRegions = [AWS_REGIONS]
 
@@ -77,8 +78,8 @@ def main():
     for cwRegion in cwRegions:
         logGroups = fetch_cw_log_groups(cwRegion)
         print('[{}] Retention period will be updated for: {}'.format(cwRegion, logGroups))
-        for logGroup in logGroups:
-            update_retention_period(logGroup, cwRegion)
+        with concurrent.futures.ThreadPoolExecutor(min(len(cwRegions), 10)) as executor:
+            [executor.submit(update_retention_period, logGroup, cwRegion) for logGroup in logGroups]
 
 def handler(event, context):
     main()
