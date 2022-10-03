@@ -71,7 +71,7 @@ def main():
     if AWS_REGIONS.lower() != 'all':
         isValidRegion = validate_aws_regions(cwRegions)
         if isValidRegion != 'ok':
-            print('{} if an invalid region'.format(isValidRegion))
+            print('{} is an invalid region'.format(isValidRegion))
             exit(1)
 
     print('Updating cloudwatch log group retention policy in following regions: {}'.format(cwRegions))
