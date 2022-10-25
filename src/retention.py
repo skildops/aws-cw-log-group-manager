@@ -21,33 +21,15 @@ def fetch_active_regions():
     activeRegions = ec2.describe_regions()['Regions']
     return [r['RegionName'] for r in activeRegions]
 
-def validate_aws_regions(regions):
-    logger.info('Validating regions...')
-    validRegions = fetch_active_regions()
-    for r in regions:
-        if r not in validRegions:
-            return r
-
-    return 'ok'
-
-def update_retention_period(logGroupName, awsRegion):
-    try:
-        logs = boto3.client('logs', awsRegion)
-        logs.put_retention_policy(
-            logGroupName=logGroupName,
-            retentionInDays=LOG_RETENTION_DAYS
-        )
-        logger.info('[{}] Retention period updated for {}'.format(awsRegion, logGroupName))
-    except (ClientError, Exception) as ce:
-        logger.error('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, logGroupName, ce))
-
-def fetch_cw_log_groups(cwRegion):
+def fetch_all_log_groups(cwRegion):
     logGroups = []
     reqArg = {}
 
     try:
         logs = boto3.client('logs', cwRegion)
         while True:
+            logger.info('[{}] Fetching all the log groups available in the region...'.format(region))
+            
             resp = logs.describe_log_groups(**reqArg)
             logGroups.extend([lg['logGroupName'] for lg in resp['logGroups']])
 
@@ -59,7 +41,34 @@ def fetch_cw_log_groups(cwRegion):
     except (ClientError, Exception) as ce:
         logger.error('[{}] Unable to fetch log groups. Reason: {}'.format(cwRegion, ce))
 
-    return logGroups
+    return {
+        cwRegion: logGroups
+    }
+
+def update_retention_period(logGroups, awsRegion):
+    logGroupResult = {
+        'success': 0,
+        'failed': 0
+    }
+
+    try:
+        logs = boto3.client('logs', awsRegion)
+        for lg in logGroups:
+            logs.put_retention_policy(
+                logGroupName=lg,
+                retentionInDays=LOG_RETENTION_DAYS
+            )
+
+            logGroupResult['success'] += 1
+
+            logger.info('[{}] Retention period updated for {}'.format(awsRegion, logGroupName))
+    except (ClientError, Exception) as ce:
+        logGroupResult['failed'] += 1
+        logger.error('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, logGroupName, ce))
+    
+    return {
+        awsRegion: logGroupResult
+    }
 
 def main():
     if AWS_REGIONS.lower() == 'all':
@@ -70,16 +79,36 @@ def main():
         cwRegions = [AWS_REGIONS]
 
     if AWS_REGIONS.lower() != 'all':
-        isValidRegion = validate_aws_regions(cwRegions)
-        if isValidRegion != 'ok':
-            logger.error('{} is an invalid region'.format(isValidRegion))
-            exit(1)
+        validRegions = fetch_active_regions()
+        for r in cwRegions:
+            if r not in validRegions:
+                logger.error('{} is an invalid region hence will be ignored'.format(r))
+                cwRegions.remove(r)
+    
+    # Fetching all log groups from all the regions
+    with concurrent.futures.ThreadPoolExecutor(10) as executor:
+        results = [executor.submit(fetch_all_log_groups, r) for r in cwRegions]
+    
+    logGroups = {}
+    for f in concurrent.futures.as_completed(results):
+        logGroups = {**logGroups, **f.result()}
 
     logger.info('Updating cloudwatch log group retention policy in the following regions: {}'.format(cwRegions))
-    for cwRegion in cwRegions:
-        logGroups = fetch_cw_log_groups(cwRegion)
+    for k, v in logGroups:
         with concurrent.futures.ThreadPoolExecutor(10) as executor:
-            [executor.submit(update_retention_period, logGroup, cwRegion) for logGroup in logGroups]
+            results = [executor.submit(update_retention_period, lg, k) for lg in v[k]]
+
+    logGroupsResult = {}
+    for f in concurrent.futures.as_completed(results):
+        logGroupsResult = {**logGroupsResult, **f.result()}
+    
+    logger.info('=================')
+    logger.info('Result:')
+    logger.info('=================')
+    logger.info('Regions processed: {}'.format(len(cwRegions)))
+    logger.info('Region\tSuccess\tFailed')
+    for k, v in logGroupsResult:
+        logger.info('{}\t{}\t{}'.format(k, v['success'], v['failed']))
 
 def handler(event, context):
     main()
