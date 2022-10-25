@@ -22,7 +22,7 @@ def fetch_active_regions():
     return [r['RegionName'] for r in activeRegions]
 
 def validate_aws_regions(regions):
-    print('Validating regions...')
+    logger.info('Validating regions...')
     validRegions = fetch_active_regions()
     for r in regions:
         if r not in validRegions:
@@ -37,9 +37,9 @@ def update_retention_period(logGroupName, awsRegion):
             logGroupName=logGroupName,
             retentionInDays=LOG_RETENTION_DAYS
         )
-        print('[{}] Retention period updated for {}'.format(awsRegion, logGroupName))
+        logger.info('[{}] Retention period updated for {}'.format(awsRegion, logGroupName))
     except (ClientError, Exception) as ce:
-        print('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, logGroupName, ce))
+        logger.error('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, logGroupName, ce))
 
 def fetch_cw_log_groups(cwRegion):
     logGroups = []
@@ -55,8 +55,9 @@ def fetch_cw_log_groups(cwRegion):
                 reqArg['nextToken'] = resp['nextToken']
             else:
                 break
+        logger.info('[{}] Retention period will be update for the following log groups: {}'.format(cwRegion, logGroups))
     except (ClientError, Exception) as ce:
-        print('Unable to fetch log groups in {} region. Reason: {}'.format(cwRegion, ce))
+        logger.error('[{}] Unable to fetch log groups. Reason: {}'.format(cwRegion, ce))
 
     return logGroups
 
@@ -71,14 +72,13 @@ def main():
     if AWS_REGIONS.lower() != 'all':
         isValidRegion = validate_aws_regions(cwRegions)
         if isValidRegion != 'ok':
-            print('{} is an invalid region'.format(isValidRegion))
+            logger.error('{} is an invalid region'.format(isValidRegion))
             exit(1)
 
-    print('Updating cloudwatch log group retention policy in following regions: {}'.format(cwRegions))
+    logger.info('Updating cloudwatch log group retention policy in the following regions: {}'.format(cwRegions))
     for cwRegion in cwRegions:
         logGroups = fetch_cw_log_groups(cwRegion)
-        print('[{}] Retention period will be updated for: {}'.format(cwRegion, logGroups))
-        with concurrent.futures.ThreadPoolExecutor(min(len(cwRegions), 10)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(10) as executor:
             [executor.submit(update_retention_period, logGroup, cwRegion) for logGroup in logGroups]
 
 def handler(event, context):
