@@ -18,75 +18,17 @@ locals {
 EOF
 }
 
-# DyanmoDb table for storing old keys
-resource "aws_dynamodb_table" "iam_key_rotator" {
-  # checkov:skip=CKV_AWS_119: SSE is enabled by default using AWS owned SSE. If required customer owned key can be used
-  # checkov:skip=CKV_AWS_28: Enabling PITR depends on user
-  name         = var.table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "user"
-  range_key    = "ak"
-
-  attribute {
-    name = "user"
-    type = "S"
-  }
-
-  attribute {
-    name = "ak"
-    type = "S"
-  }
-
-  ttl {
-    attribute_name = "delete_on"
-    enabled        = true
-  }
-
-  server_side_encryption {
-    enabled     = var.enable_sse
-    kms_key_arn = var.kms_key_arn
-  }
-
-  point_in_time_recovery {
-    enabled = var.enable_pitr
-  }
-
-  stream_enabled   = true
-  stream_view_type = "OLD_IMAGE"
-
-  tags = var.tags
-}
-
-# ====== Lambda Layers =====
-resource "aws_lambda_layer_version" "pytz" {
-  filename         = "pytz.zip"
-  source_code_hash = filebase64sha256("pytz.zip")
-  description      = "https://pypi.org/project/pytz/"
-  layer_name       = "pytz"
-
-  compatible_runtimes = ["python3.6", "python3.7", "python3.8", "python3.9"]
-}
-
-resource "aws_lambda_layer_version" "requests" {
-  filename         = "requests.zip"
-  source_code_hash = filebase64sha256("requests.zip")
-  description      = "https://pypi.org/project/requests/"
-  layer_name       = "requests"
-
-  compatible_runtimes = ["python3.6", "python3.7", "python3.8", "python3.9"]
-}
-
-# ====== iam-key-creator ======
-resource "aws_iam_role" "iam_key_creator" {
-  name                  = var.key_creator_role_name
+# ====== log-retention ======
+resource "aws_iam_role" "log_retention" {
+  name                  = var.log_retention_role_name
   assume_role_policy    = local.lambda_assume_policy
   force_detach_policies = true
   tags                  = var.tags
 }
 
-resource "aws_iam_role_policy" "iam_key_creator_policy" {
-  name = "${var.key_creator_role_name}-policy"
-  role = aws_iam_role.iam_key_creator.id
+resource "aws_iam_role_policy" "log_retention_policy" {
+  name = "${var.log_retention_role_name}-policy"
+  role = aws_iam_role.log_retention.id
 
   policy = <<-EOF
   {
@@ -128,111 +70,82 @@ resource "aws_iam_role_policy" "iam_key_creator_policy" {
   EOF
 }
 
-resource "aws_iam_role_policy_attachment" "iam_key_creator_logs" {
-  role       = aws_iam_role.iam_key_creator.name
+resource "aws_iam_role_policy_attachment" "log_retention_logs" {
+  role       = aws_iam_role.log_retention.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_cloudwatch_event_rule" "iam_key_creator" {
-  name        = "IAMAccessKeyCreator"
-  description = "Triggers a lambda function periodically which creates a set of new access key pair for a user if the existing key pair is X days old"
-  is_enabled  = true
-
+resource "aws_cloudwatch_event_rule" "log_retention" {
+  name                = "UpdateLogRetention"
+  description         = "Triggers a lambda function periodically which updates retention period of log groups"
+  is_enabled          = true
   schedule_expression = "cron(${var.cron_expression})"
 }
 
-resource "aws_cloudwatch_event_target" "iam_key_creator" {
-  rule      = aws_cloudwatch_event_rule.iam_key_creator.name
-  target_id = "TriggerIAMKeyCreatorLambda"
-  arn       = aws_lambda_function.iam_key_creator.arn
+resource "aws_cloudwatch_event_target" "log_retention" {
+  rule      = aws_cloudwatch_event_rule.log_retention.name
+  target_id = "TriggerUpdateLogRetentionLambda"
+  arn       = aws_lambda_function.log_retention.arn
 }
 
-resource "aws_lambda_permission" "iam_key_creator" {
+resource "aws_lambda_permission" "log_retention" {
   statement_id  = "AllowExecutionFromCloudWatch"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.iam_key_creator.function_name
+  function_name = aws_lambda_function.log_retention.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.iam_key_creator.arn
+  source_arn    = aws_cloudwatch_event_rule.log_retention.arn
 }
 
-resource "aws_ssm_parameter" "mailgun" {
-  count = var.mail_client == "mailgun" ? 1 : 0
-  name  = "/iakr/secret/mailgun"
-  value = var.mailgun_api_key
-  type  = "SecureString"
-  tags  = var.tags
-}
-
-resource "aws_ssm_parameter" "smtp_password" {
-  count = var.mail_client == "smtp" ? 1 : 0
-  name  = "/iakr/secret/smtp"
-  value = var.smtp_password
-  type  = "SecureString"
-  tags  = var.tags
-}
-
-resource "aws_cloudwatch_log_group" "iam_key_creator" {
-  name              = "/aws/lambda/${var.key_creator_function_name}"
-  retention_in_days = var.cw_log_group_retention
-  kms_key_id        = var.cw_logs_kms_key_arn
+resource "aws_cloudwatch_log_group" "log_retention" {
+  name              = "/aws/lambda/${var.log_retention_function_name}"
+  retention_in_days = var.lambda_cw_log_group_retention
+  kms_key_id        = var.lambda_cw_logs_kms_key_arn
   tags              = var.tags
 }
 
-resource "aws_lambda_function" "iam_key_creator" {
+resource "aws_lambda_function" "log_retention" {
   # checkov:skip=CKV_AWS_50: Enabling X-Ray tracing depends on user
   # checkov:skip=CKV_AWS_115: Setting reserved concurrent execution depends on user
   # checkov:skip=CKV_AWS_116: DLQ not required
   # checkov:skip=CKV_AWS_117: VPC deployment not required
   # checkov:skip=CKV_AWS_173: By default environment variables are encrypted at rest
-  function_name    = var.key_creator_function_name
-  description      = "Create new access key pair for IAM user"
-  role             = aws_iam_role.iam_key_creator.arn
-  filename         = data.archive_file.creator.output_path
-  source_code_hash = data.archive_file.creator.output_base64sha256
-  handler          = "creator.handler"
+  function_name    = var.log_retention_function_name
+  description      = "Update log group retention period"
+  role             = aws_iam_role.log_retention.arn
+  filename         = data.archive_file.retention.output_path
+  source_code_hash = data.archive_file.retention.output_base64sha256
+  handler          = "retention.handler"
   runtime          = var.lambda_runtime
 
-  memory_size                    = var.function_memory_size
-  timeout                        = var.function_timeout
-  reserved_concurrent_executions = var.reserved_concurrent_executions
-
-  layers = [aws_lambda_layer_version.pytz.arn, aws_lambda_layer_version.requests.arn]
+  memory_size                    = var.lambda_memory_size
+  timeout                        = var.lambda_timeout
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   tracing_config {
-    mode = var.xray_tracing_mode
+    mode = var.lambda_xray_tracing_mode
   }
 
   environment {
     variables = {
-      IAM_KEY_ROTATOR_TABLE   = aws_dynamodb_table.iam_key_rotator.name
-      ROTATE_AFTER_DAYS       = var.rotate_after_days
-      DELETE_AFTER_DAYS       = var.delete_after_days
-      MAIL_CLIENT             = var.mail_client
-      MAIL_FROM               = var.mail_from
-      SMTP_PROTOCOL           = var.smtp_protocol
-      SMTP_PORT               = var.smtp_port
-      SMTP_SERVER             = var.smtp_server
-      SMTP_PASSWORD_PARAMETER = var.mail_client == "smtp" ? join(",", aws_ssm_parameter.smtp_password.*.name) : null
-      MAILGUN_API_URL         = var.mailgun_api_url
-      MAILGUN_API_KEY_NAME    = var.mail_client == "mailgun" ? join(",", aws_ssm_parameter.mailgun.*.name) : null
-      ACCOUNT_ID              = local.account_id
+      AWS_REGIONS        = join(", ", var.aws_regions)
+      LOG_RETENTION_DAYS = var.log_retention_days
     }
   }
 
   tags = var.tags
 }
 
-# ====== iam-key-destructor ======
-resource "aws_iam_role" "iam_key_destructor" {
-  name                  = var.key_destructor_role_name
+# ====== log-encryption ======
+resource "aws_iam_role" "log_encryption" {
+  name                  = var.log_encryption_role_name
   assume_role_policy    = local.lambda_assume_policy
   force_detach_policies = true
   tags                  = var.tags
 }
 
-resource "aws_iam_role_policy" "iam_key_destructor_policy" {
-  name = "${var.key_destructor_role_name}-policy"
-  role = aws_iam_role.iam_key_destructor.id
+resource "aws_iam_role_policy" "log_encryption_policy" {
+  name = "${var.log_encryption_role_name}-policy"
+  role = aws_iam_role.log_encryption.id
 
   policy = <<-EOF
   {
@@ -286,61 +199,64 @@ resource "aws_iam_role_policy" "iam_key_destructor_policy" {
   EOF
 }
 
-resource "aws_iam_role_policy_attachment" "iam_key_destructor_logs" {
-  role       = aws_iam_role.iam_key_destructor.name
+resource "aws_iam_role_policy_attachment" "log_encryption_logs" {
+  role       = aws_iam_role.log_encryption.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_lambda_event_source_mapping" "iam_key_destructor" {
-  event_source_arn  = aws_dynamodb_table.iam_key_rotator.stream_arn
-  function_name     = aws_lambda_function.iam_key_destructor.arn
-  starting_position = "LATEST"
+resource "aws_cloudwatch_event_rule" "log_encryption" {
+  name                = "UpdateLogEncryption"
+  description         = "Triggers a lambda function periodically which updates/removes KMS key for log groups"
+  is_enabled          = true
+  schedule_expression = "cron(${var.cron_expression})"
 }
 
-resource "aws_cloudwatch_log_group" "iam_key_destructor" {
-  name              = "/aws/lambda/${var.key_destructor_function_name}"
-  retention_in_days = var.cw_log_group_retention
-  kms_key_id        = var.cw_logs_kms_key_arn
+resource "aws_cloudwatch_event_target" "log_encryption" {
+  rule      = aws_cloudwatch_event_rule.log_encryption.name
+  target_id = "TriggerUpdateLogEncryptionLambda"
+  arn       = aws_lambda_function.log_encryption.arn
+}
+
+resource "aws_lambda_permission" "log_encryption" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.log_encryption.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.log_encryption.arn
+}
+
+resource "aws_cloudwatch_log_group" "log_encryption" {
+  name              = "/aws/lambda/${var.log_encryption_function_name}"
+  retention_in_days = var.lambda_cw_log_group_retention
+  kms_key_id        = var.lambda_cw_logs_kms_key_arn
   tags              = var.tags
 }
 
-resource "aws_lambda_function" "iam_key_destructor" {
+resource "aws_lambda_function" "log_encryption" {
   # checkov:skip=CKV_AWS_50: Enabling X-Ray tracing depends on user
   # checkov:skip=CKV_AWS_115: Setting reserved concurrent execution depends on user
   # checkov:skip=CKV_AWS_116: DLQ not required
   # checkov:skip=CKV_AWS_117: VPC deployment not required
   # checkov:skip=CKV_AWS_173: By default environment variables are encrypted at rest
-  function_name    = var.key_destructor_function_name
-  description      = "Delete existing access key pair for IAM user"
-  role             = aws_iam_role.iam_key_destructor.arn
-  filename         = data.archive_file.destructor.output_path
-  source_code_hash = data.archive_file.destructor.output_base64sha256
-  handler          = "destructor.handler"
+  function_name    = var.log_encryption_function_name
+  description      = "Update/Remove KMS key for log group"
+  role             = aws_iam_role.log_encryption.arn
+  filename         = data.archive_file.encryption.output_path
+  source_code_hash = data.archive_file.encryption.output_base64sha256
+  handler          = "encryption.handler"
   runtime          = var.lambda_runtime
 
-  memory_size                    = var.function_memory_size
-  timeout                        = var.function_timeout
-  reserved_concurrent_executions = var.reserved_concurrent_executions
-
-  layers = [aws_lambda_layer_version.requests.arn]
+  memory_size                    = var.lambda_memory_size
+  timeout                        = var.lambda_timeout
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   tracing_config {
-    mode = var.xray_tracing_mode
+    mode = var.lambda_xray_tracing_mode
   }
 
   environment {
     variables = {
-      IAM_KEY_ROTATOR_TABLE   = aws_dynamodb_table.iam_key_rotator.name
-      RETRY_AFTER_MINS        = var.retry_after_mins
-      MAIL_CLIENT             = var.mail_client
-      MAIL_FROM               = var.mail_from
-      SMTP_PROTOCOL           = var.smtp_protocol
-      SMTP_PORT               = var.smtp_port
-      SMTP_SERVER             = var.smtp_server
-      SMTP_PASSWORD_PARAMETER = var.mail_client == "smtp" ? join(",", aws_ssm_parameter.smtp_password.*.name) : null
-      MAILGUN_API_URL         = var.mailgun_api_url
-      MAILGUN_API_KEY_NAME    = var.mail_client == "mailgun" ? join(",", aws_ssm_parameter.mailgun.*.name) : null
-      ACCOUNT_ID              = local.account_id
+      ENCRYPTION_CONFIG = jsonencode(var.encryption_config)
     }
   }
 

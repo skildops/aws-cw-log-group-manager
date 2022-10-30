@@ -11,7 +11,7 @@
 
 ### Supported Operations:
 - Update retention period
-- Update KMS key
+- Update/remove KMS key
 
 ### Setup:
 - Use the [terraform module](terraform) included in this repo to create all the AWS resources required to automate IAM key rotation

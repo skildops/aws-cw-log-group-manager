@@ -16,7 +16,7 @@ ENCRYPTION_CONFIG structure:
 {
     "ap-south-1": "KMS_KEY_ARN",
     "us-east-1": "KMS_KEY_ARN",
-    "eu-west-1": "" # Leave blank to remove KMS encryption from all the cloudwatch log groups in the particular region
+    "eu-west-1": "" # Leave blank to remove KMS key from all the cloudwatch log groups in the particular region
 }
 '''
 ENCRYPTION_CONFIG = json.loads(os.environ.get('ENCRYPTION_CONFIG', {}))
