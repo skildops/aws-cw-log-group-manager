@@ -6,6 +6,7 @@ import concurrent.futures
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger('retention')
+logging.getLogger().addHandler(logging.StreamHandler())
 logger.setLevel(logging.INFO)
 
 # ======== Global variables ========
@@ -28,8 +29,8 @@ def fetch_all_log_groups(cwRegion):
     try:
         logs = boto3.client('logs', cwRegion)
         while True:
-            logger.info('[{}] Fetching all the log groups available in the region...'.format(region))
-            
+            logger.info('[{}] Fetching all the log groups available in the region...'.format(cwRegion))
+
             resp = logs.describe_log_groups(**reqArg)
             logGroups.extend([lg['logGroupName'] for lg in resp['logGroups']])
 
@@ -51,9 +52,9 @@ def update_retention_period(logGroups, awsRegion):
         'failed': 0
     }
 
-    try:
-        logs = boto3.client('logs', awsRegion)
-        for lg in logGroups:
+    logs = boto3.client('logs', awsRegion)
+    for lg in logGroups:
+        try:
             logs.put_retention_policy(
                 logGroupName=lg,
                 retentionInDays=LOG_RETENTION_DAYS
@@ -61,11 +62,11 @@ def update_retention_period(logGroups, awsRegion):
 
             logGroupResult['success'] += 1
 
-            logger.info('[{}] Retention period updated for {}'.format(awsRegion, logGroupName))
-    except (ClientError, Exception) as ce:
-        logGroupResult['failed'] += 1
-        logger.error('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, logGroupName, ce))
-    
+            logger.info('[{}] Retention period updated for {}'.format(awsRegion, lg))
+        except (ClientError, Exception) as ce:
+            logGroupResult['failed'] += 1
+            logger.error('[{}] Unable to update retention period for {}. Reason: {}'.format(awsRegion, lg, ce))
+
     return {
         awsRegion: logGroupResult
     }
@@ -84,30 +85,31 @@ def main():
             if r not in validRegions:
                 logger.error('{} is an invalid region hence will be ignored'.format(r))
                 cwRegions.remove(r)
-    
+
     # Fetching all log groups from all the regions
     with concurrent.futures.ThreadPoolExecutor(10) as executor:
         results = [executor.submit(fetch_all_log_groups, r) for r in cwRegions]
-    
+
     logGroups = {}
     for f in concurrent.futures.as_completed(results):
         logGroups = {**logGroups, **f.result()}
 
     logger.info('Updating cloudwatch log group retention policy in the following regions: {}'.format(cwRegions))
-    for k, v in logGroups:
-        with concurrent.futures.ThreadPoolExecutor(10) as executor:
-            results = [executor.submit(update_retention_period, lg, k) for lg in v[k]]
+    with concurrent.futures.ThreadPoolExecutor(10) as executor:
+        results = [executor.submit(update_retention_period, logGroups[k], k) for k in logGroups]
 
     logGroupsResult = {}
     for f in concurrent.futures.as_completed(results):
         logGroupsResult = {**logGroupsResult, **f.result()}
-    
-    logger.info('=================')
-    logger.info('Result:')
+
+    logger.info('\n=================')
+    logger.info('Final Result')
     logger.info('=================')
     logger.info('Regions processed: {}'.format(len(cwRegions)))
-    logger.info('Region\tSuccess\tFailed')
-    for k, v in logGroupsResult:
+    logger.info('------------------------------')
+    logger.info('Region ID\tSuccess\tFailed')
+    logger.info('------------------------------')
+    for k, v in logGroupsResult.items():
         logger.info('{}\t{}\t{}'.format(k, v['success'], v['failed']))
 
 def handler(event, context):
