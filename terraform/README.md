@@ -41,7 +41,7 @@ This terraform module will deploy the following services:
 | tags | Key value pair to assign to resources | `map(string)` | `{}` | no |
 | aws_regions | List of regions within which log group retention period needs to be updated | `list(string)` | `[]` | no |
 | log_retention_days | Retention period to be set for all the log groups in the region(s) specified in `aws_regions` | `number` | `90` | no |
-| encryption_config | To update/remove the KMS key for log group use the following format:<pre>{<br>  us-east-1  = "" # Leave blank to remove KMS key from all the cloudwatch log groups in the particular region<br>  eu-west-1  = "arn:aws:kms:eu-west-1:ACCOUNT_ID:key/xxxxxx"<br>  ap-south-1 = "arn:aws:kms:ap-south-1:ACCOUNT_ID:key/xxxxxx"<br>}</pre> | `map(string)` | `{}` | no |
+| log_encryption_config | To update/remove the KMS key for log group use the following format:<pre>{<br>  us-east-1  = "" # Leave blank to remove KMS key from all the cloudwatch log groups in the particular region<br>  eu-west-1  = "arn:aws:kms:eu-west-1:ACCOUNT_ID:key/xxxxxx"<br>  ap-south-1 = "arn:aws:kms:ap-south-1:ACCOUNT_ID:key/xxxxxx"<br>}</pre> | `map(string)` | `{}` | no |
 
 ## Outputs
 
