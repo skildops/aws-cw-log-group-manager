@@ -78,7 +78,7 @@ resource "aws_iam_role_policy_attachment" "log_retention_logs" {
 resource "aws_cloudwatch_event_rule" "log_retention" {
   name                = "UpdateLogRetention"
   description         = "Triggers a lambda function periodically which updates retention period of log groups"
-  is_enabled          = true
+  is_enabled          = length(var.aws_regions) > 1 ? true : false
   schedule_expression = "cron(${var.cron_expression})"
 }
 
@@ -207,7 +207,7 @@ resource "aws_iam_role_policy_attachment" "log_encryption_logs" {
 resource "aws_cloudwatch_event_rule" "log_encryption" {
   name                = "UpdateLogEncryption"
   description         = "Triggers a lambda function periodically which updates/removes KMS key for log groups"
-  is_enabled          = true
+  is_enabled          = length(var.log_encryption_config) > 1 ? true : false
   schedule_expression = "cron(${var.cron_expression})"
 }
 
@@ -256,7 +256,7 @@ resource "aws_lambda_function" "log_encryption" {
 
   environment {
     variables = {
-      ENCRYPTION_CONFIG = jsonencode(var.encryption_config)
+      LOG_ENCRYPTION_CONFIG = jsonencode(var.log_encryption_config)
     }
   }
 

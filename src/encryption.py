@@ -12,14 +12,14 @@ logger.setLevel(logging.INFO)
 
 # ======== Global variables ========
 '''
-ENCRYPTION_CONFIG structure:
+LOG_ENCRYPTION_CONFIG structure:
 {
     "ap-south-1": "KMS_KEY_ARN",
     "us-east-1": "KMS_KEY_ARN",
     "eu-west-1": "" # Leave blank to remove KMS key from all the cloudwatch log groups in the particular region
 }
 '''
-ENCRYPTION_CONFIG = json.loads(os.environ.get('ENCRYPTION_CONFIG', {}))
+LOG_ENCRYPTION_CONFIG = json.loads(os.environ.get('LOG_ENCRYPTION_CONFIG', {}))
 
 def fetch_active_regions():
     ec2 = boto3.client('ec2', 'us-east-1')
@@ -87,14 +87,14 @@ def update_encryption_key(awsRegion, kmsKeyArn, logGroupNames):
 
 def main():
     validRegions = fetch_active_regions()
-    for k in ENCRYPTION_CONFIG:
+    for k in LOG_ENCRYPTION_CONFIG:
         if k not in validRegions:
             logger.error('{} is an invalid region hence will be ignored'.format(k))
-            ENCRYPTION_CONFIG.pop(k)
+            LOG_ENCRYPTION_CONFIG.pop(k)
 
     # Fetching all log groups from all the regions
     with concurrent.futures.ThreadPoolExecutor(10) as executor:
-        results = [executor.submit(fetch_all_log_groups, r) for r in ENCRYPTION_CONFIG]
+        results = [executor.submit(fetch_all_log_groups, r) for r in LOG_ENCRYPTION_CONFIG]
 
     logGroups = {}
     for f in concurrent.futures.as_completed(results):
@@ -102,7 +102,7 @@ def main():
 
     # Updating encryption key for all log groups
     with concurrent.futures.ThreadPoolExecutor(10) as executor:
-        results = [executor.submit(update_encryption_key, region, ENCRYPTION_CONFIG[region], logGroups[region]) for region in ENCRYPTION_CONFIG]
+        results = [executor.submit(update_encryption_key, region, LOG_ENCRYPTION_CONFIG[region], logGroups[region]) for region in LOG_ENCRYPTION_CONFIG]
 
     logGroupsResult = {}
     for f in concurrent.futures.as_completed(results):
@@ -111,7 +111,7 @@ def main():
     logger.info('=================')
     logger.info('Final Result')
     logger.info('=================')
-    logger.info('Regions processed: {}'.format(len(ENCRYPTION_CONFIG)))
+    logger.info('Regions processed: {}'.format(len(LOG_ENCRYPTION_CONFIG)))
     logger.info('\nKMS key update final result:')
     logger.info('------------------------------')
     logger.info('Region ID\tSuccess\tFailed')

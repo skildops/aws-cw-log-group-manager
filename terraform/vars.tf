@@ -118,7 +118,7 @@ variable "log_retention_days" {
   description = "Retention period to be set for all the log groups in the region(s) specified in `aws_regions`"
 }
 
-variable "encryption_config" {
+variable "log_encryption_config" {
   type        = map(string)
   default     = {}
   description = <<-EOT
