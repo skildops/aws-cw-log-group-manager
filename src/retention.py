@@ -10,7 +10,7 @@ logger.setLevel(logging.INFO)
 
 # ======== Global variables ========
 # AWS_REGION environment variable is by default available within lambda environment
-AWS_REGIONS = os.environ.get('AWS_REGIONS', os.environ.get('AWS_REGION'))
+AWS_REGIONS = os.environ.get('AWS_REGIONS', '')
 
 # No. of days to retain logs within a cloudwatch group
 LOG_RETENTION_DAYS = int(os.environ.get('LOG_RETENTION_DAYS', 90))
