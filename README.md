@@ -16,5 +16,9 @@
 ### Logic Flow:
 ![aws-cw-log-group-manager](aws-cw-log-group-manager.jpg "AWS CloudWatch Log Group Manager")
 
+- CloudWatch Event triggers retention and encryption function periodically.
+- Retention function scans all the log groups present in the provided region(s) and updates the retention period for all the available log group(s)
+- Encryption function scans all the log groups present in the provided region(s) and updates or removes KMS encryption for all the available log group(s)
+
 ### Setup:
 - Use the [terraform module](terraform) included in this repo to create all the AWS resources required to automate IAM key rotation
