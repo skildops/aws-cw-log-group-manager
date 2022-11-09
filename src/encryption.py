@@ -7,7 +7,6 @@ import concurrent.futures
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger('encryption')
-logging.getLogger().addHandler(logging.StreamHandler())
 logger.setLevel(logging.INFO)
 
 # ======== Global variables ========
@@ -130,5 +129,3 @@ def main():
 
 def handler(event, context):
     main()
-
-handler(None, None)

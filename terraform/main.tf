@@ -26,48 +26,22 @@ resource "aws_iam_role" "log_retention" {
   tags                  = var.tags
 }
 
-resource "aws_iam_role_policy" "log_retention_policy" {
-  name = "${var.log_retention_role_name}-policy"
-  role = aws_iam_role.log_retention.id
-
-  policy = <<-EOF
-  {
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Action": [
-          "iam:ListUserTags",
-          "iam:ListAccessKeys",
-          "iam:ListUsers",
-          "iam:CreateAccessKey"
-        ],
-        "Effect": "Allow",
-        "Resource": "*"
-      },
-      {
-        "Action": [
-          "dynamodb:PutItem"
-        ],
-        "Effect": "Allow",
-        "Resource": "${aws_dynamodb_table.iam_key_rotator.arn}"
-      },
-      {
-        "Action": [
-          "ssm:GetParameter"
-        ],
-        "Effect": "Allow",
-        "Resource": "arn:aws:ssm:${var.region}:${local.account_id}:parameter/iakr/*"
-      },
-      {
-        "Action": [
-          "ses:SendEmail"
-        ],
-        "Effect": "Allow",
-        "Resource": "*"
-      }
+data "aws_iam_policy_document" "log_retention_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeRegions",
+      "logs:DescribeLogGroups",
+      "logs:PutRetentionPolicy"
     ]
+    resources = ["*"]
   }
-  EOF
+}
+
+resource "aws_iam_role_policy" "log_retention_policy" {
+  name   = var.log_retention_role_name
+  role   = aws_iam_role.log_retention.id
+  policy = data.aws_iam_policy_document.log_retention_policy.json
 }
 
 resource "aws_iam_role_policy_attachment" "log_retention_logs" {
@@ -77,7 +51,7 @@ resource "aws_iam_role_policy_attachment" "log_retention_logs" {
 
 resource "aws_cloudwatch_event_rule" "log_retention" {
   name                = "UpdateLogRetention"
-  description         = "Triggers a lambda function periodically which updates retention period of log groups"
+  description         = "Triggers a lambda function periodically which updates retention period of all log groups"
   is_enabled          = length(var.aws_regions) > 1 ? true : false
   schedule_expression = "cron(${var.cron_expression})"
 }
@@ -143,60 +117,23 @@ resource "aws_iam_role" "log_encryption" {
   tags                  = var.tags
 }
 
-resource "aws_iam_role_policy" "log_encryption_policy" {
-  name = "${var.log_encryption_role_name}-policy"
-  role = aws_iam_role.log_encryption.id
-
-  policy = <<-EOF
-  {
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Action": [
-          "iam:DeleteAccessKey"
-        ],
-        "Effect": "Allow",
-        "Resource": "*"
-      },
-      {
-        "Action": [
-          "dynamodb:PutItem"
-        ],
-        "Effect": "Allow",
-        "Resource": [
-          "${aws_dynamodb_table.iam_key_rotator.arn}"
-        ]
-      },
-      {
-        "Action": [
-          "dynamodb:DescribeStream",
-          "dynamodb:GetRecords",
-          "dynamodb:GetShardIterator",
-          "dynamodb:ListShards",
-          "dynamodb:ListStreams"
-        ],
-        "Effect": "Allow",
-        "Resource": [
-          "${aws_dynamodb_table.iam_key_rotator.stream_arn}"
-        ]
-      },
-      {
-        "Action": [
-          "ssm:GetParameter"
-        ],
-        "Effect": "Allow",
-        "Resource": "arn:aws:ssm:${var.region}:${local.account_id}:parameter/iakr/*"
-      },
-      {
-        "Action": [
-          "ses:SendEmail"
-        ],
-        "Effect": "Allow",
-        "Resource": "*"
-      }
+data "aws_iam_policy_document" "log_encryption_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeRegions",
+      "logs:DescribeLogGroups",
+      "logs:AssociateKmsKey",
+      "logs:DisassociateKmsKey"
     ]
+    resources = ["*"]
   }
-  EOF
+}
+
+resource "aws_iam_role_policy" "log_encryption_policy" {
+  name   = var.log_encryption_role_name
+  role   = aws_iam_role.log_encryption.id
+  policy = data.aws_iam_policy_document.log_encryption_policy.json
 }
 
 resource "aws_iam_role_policy_attachment" "log_encryption_logs" {
@@ -206,7 +143,7 @@ resource "aws_iam_role_policy_attachment" "log_encryption_logs" {
 
 resource "aws_cloudwatch_event_rule" "log_encryption" {
   name                = "UpdateLogEncryption"
-  description         = "Triggers a lambda function periodically which updates/removes KMS key for log groups"
+  description         = "Triggers a lambda function periodically which updates/removes KMS key for all log groups"
   is_enabled          = length(var.log_encryption_config) > 1 ? true : false
   schedule_expression = "cron(${var.cron_expression})"
 }
