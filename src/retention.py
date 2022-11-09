@@ -13,7 +13,7 @@ logger.setLevel(logging.INFO)
 AWS_REGIONS = os.environ.get('AWS_REGIONS', os.environ.get('AWS_REGION'))
 
 # No. of days to retain logs within a cloudwatch group
-LOG_RETENTION_DAYS = os.environ.get('LOG_RETENTION_DAYS', 90)
+LOG_RETENTION_DAYS = int(os.environ.get('LOG_RETENTION_DAYS', 90))
 # ==================================
 
 def fetch_active_regions():

@@ -111,7 +111,7 @@ def main():
     logger.info('Final Result')
     logger.info('=================')
     logger.info('Regions processed: {}'.format(len(LOG_ENCRYPTION_CONFIG)))
-    logger.info('\nKMS key update final result:')
+    logger.info('KMS key update final result:')
     logger.info('------------------------------')
     logger.info('Region ID\tSuccess\tFailed')
     logger.info('------------------------------')
@@ -119,7 +119,7 @@ def main():
         if v['type'] == 'add':
             logger.info('{}\t{}\t{}'.format(k, v['success'], v['failed']))
 
-    logger.info('\nKMS key remove final result:')
+    logger.info('KMS key remove final result:')
     logger.info('------------------------------')
     logger.info('Region ID\tSuccess\tFailed')
     logger.info('------------------------------')

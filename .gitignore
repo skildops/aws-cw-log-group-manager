@@ -36,5 +36,4 @@ __pycache__
 */*.json
 */*.sh
 header.tf
-creator.zip
-destructor.zip
+*.zip

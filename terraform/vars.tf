@@ -30,50 +30,50 @@ variable "session_token" {
 
 variable "log_retention_role_name" {
   type        = string
-  default     = "update-log-retention"
-  description = "Name for IAM role to assocaite with log retention lambda function"
+  default     = "log-group-retention-manager"
+  description = "Name of the IAM role to associate with the log retention lambda function"
 }
 
 variable "log_retention_function_name" {
   type        = string
-  default     = "update-log-retention"
-  description = "Name for lambda function responsible for updating log retention period"
+  default     = "log-group-retention-manager"
+  description = "Name of the lambda function responsible for updating log retention period"
 }
 
 variable "log_encryption_role_name" {
   type        = string
-  default     = "iam-key-destructor"
-  description = "Name for IAM role to assocaite with key destructor lambda function"
+  default     = "log-group-encryption-manager"
+  description = "Name of the IAM role to associate with the log encryption lambda function"
 }
 
 variable "log_encryption_function_name" {
   type        = string
-  default     = "iam-key-destructor"
-  description = "Name for lambda function responsible for deleting existing access key pair"
+  default     = "log-group-encryption-manager"
+  description = "Name of the lambda function responsible for updating/removing encryption config for log groups"
 }
 
 variable "cron_expression" {
   type        = string
   default     = "0 12 * * ? *"
-  description = "[CRON expression](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-schedule-expressions.html) to determine how frequently `key creator` function will be invoked to check if new key pair needs to be generated for an IAM user"
+  description = "[CRON expression](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-schedule-expressions.html) to determine how frequently `log retention` and `log encryption` function will be invoked"
 }
 
 variable "lambda_runtime" {
   type        = string
   default     = "python3.9"
-  description = "Lambda runtime to use for code execution for both creator and destructor function"
+  description = "Lambda runtime to use for both the log retention and encryption function"
 }
 
 variable "lambda_memory_size" {
   type        = number
   default     = 128
-  description = "Amount of memory to allocate to both creator and destructor function"
+  description = "Amount of memory to allocate to both the log retention and encryption function"
 }
 
 variable "lambda_timeout" {
   type        = number
   default     = 10
-  description = "Timeout to set for both creator and destructor function"
+  description = "Timeout to set for both the log retention and encryption function"
 }
 
 variable "lambda_reserved_concurrent_executions" {
@@ -97,7 +97,7 @@ variable "lambda_cw_log_group_retention" {
 variable "lambda_cw_logs_kms_key_arn" {
   type        = string
   default     = null
-  description = "ARN of KMS key to use for encrypting CloudWatch logs at rest"
+  description = "ARN of KMS key to enable SSE for CloudWatch log group that will be used to store logs of both the log retention and encryption function"
 }
 
 variable "tags" {
@@ -122,7 +122,7 @@ variable "log_encryption_config" {
   type        = map(string)
   default     = {}
   description = <<-EOT
-    To update/remove the KMS key for log group use the following format:
+    To update/remove the KMS key for log group(s) use the following format:
     ```{
       us-east-1  = "" # Leave blank to remove KMS key from all the cloudwatch log groups in the particular region
       eu-west-1  = "arn:aws:kms:eu-west-1:ACCOUNT_ID:key/xxxxxx"
