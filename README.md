@@ -13,5 +13,8 @@
 - Update retention period
 - Update/remove KMS key
 
+### Logic Flow:
+![aws-cw-log-group-manager](aws-cw-log-group-manager.jpg "AWS CloudWatch Log Group Manager")
+
 ### Setup:
 - Use the [terraform module](terraform) included in this repo to create all the AWS resources required to automate IAM key rotation
