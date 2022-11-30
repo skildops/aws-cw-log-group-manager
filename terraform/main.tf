@@ -27,6 +27,7 @@ resource "aws_iam_role" "log_retention" {
 }
 
 data "aws_iam_policy_document" "log_retention_policy" {
+  # checkov:skip=CKV_AWS_111: Write access required
   statement {
     effect = "Allow"
     actions = [
@@ -83,6 +84,7 @@ resource "aws_lambda_function" "log_retention" {
   # checkov:skip=CKV_AWS_116: DLQ not required
   # checkov:skip=CKV_AWS_117: VPC deployment not required
   # checkov:skip=CKV_AWS_173: By default environment variables are encrypted at rest
+  # checkov:skip=CKV_AWS_272: Code signing not required
   function_name    = var.log_retention_function_name
   description      = "Update log group retention period"
   role             = aws_iam_role.log_retention.arn
@@ -118,6 +120,7 @@ resource "aws_iam_role" "log_encryption" {
 }
 
 data "aws_iam_policy_document" "log_encryption_policy" {
+  # checkov:skip=CKV_AWS_111: Write access required
   statement {
     effect = "Allow"
     actions = [
@@ -175,6 +178,7 @@ resource "aws_lambda_function" "log_encryption" {
   # checkov:skip=CKV_AWS_116: DLQ not required
   # checkov:skip=CKV_AWS_117: VPC deployment not required
   # checkov:skip=CKV_AWS_173: By default environment variables are encrypted at rest
+  # checkov:skip=CKV_AWS_272: Code signing not required
   function_name    = var.log_encryption_function_name
   description      = "Update/Remove KMS key for log group"
   role             = aws_iam_role.log_encryption.arn
