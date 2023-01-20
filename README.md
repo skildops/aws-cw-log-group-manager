@@ -1,6 +1,6 @@
 ## aws-cw-log-group-manager
 
-![License](https://img.shields.io/github/license/skildops/aws-cw-log-group-manager?style=for-the-badge) ![CodeQL](https://img.shields.io/github/workflow/status/skildops/aws-cw-log-group-manager/codeql/main?label=CodeQL&style=for-the-badge) ![Commit](https://img.shields.io/github/last-commit/skildops/aws-cw-log-group-manager?style=for-the-badge) ![Release](https://img.shields.io/github/v/release/skildops/aws-cw-log-group-manager?style=for-the-badge)
+![License](https://img.shields.io/github/license/skildops/aws-cw-log-group-manager?style=for-the-badge) ![CodeQL](https://img.shields.io/github/actions/workflow/status/skildops/aws-cw-log-group-manager/codeql.yml?branch=main&label=CodeQL&style=for-the-badge) ![Commit](https://img.shields.io/github/last-commit/skildops/aws-cw-log-group-manager?style=for-the-badge) ![Release](https://img.shields.io/github/v/release/skildops/aws-cw-log-group-manager?style=for-the-badge)
 
 ### Prerequisites:
 - [Terraform](https://www.terraform.io/downloads.html)
